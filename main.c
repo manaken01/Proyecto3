@@ -41,6 +41,7 @@ struct group   *grp;
 struct tm      *tm;
 char            datestring[256];
 
+<<<<<<< Updated upstream
 void readData() { //Función para leer los datos
     struct fileInfo file;
     FILE *f = fopen("logs.txt", "rb"); //Se abre el archivo de modo que se pueda lockear y leer
@@ -51,6 +52,8 @@ void readData() { //Función para leer los datos
     }
     fclose(f);
 }
+=======
+>>>>>>> Stashed changes
 
 void guardarDirectorio(char *dirName) {
 	DIR *dir = opendir(dirName); //Se abre el directorio 
@@ -79,7 +82,48 @@ void guardarDirectorio(char *dirName) {
     fclose(logs);
 }
 
+<<<<<<< Updated upstream
 int startServer() {
+=======
+void compararDirectorio(int sock){
+    
+}
+//----------- cliente
+int connectoServer(){
+  //crear socket para conectar con el servidor y lo retorna
+  int sock;
+  struct sockaddr_in server;
+  
+
+  #if defined _WIN32
+  WSADATA wsa_data;
+  WSAStartup(MAKEWORD(1, 1), &wsa_data);
+  #endif
+
+  // Create socket
+  sock = socket(AF_INET, SOCK_STREAM, 0);
+  if (sock == -1) {
+    printf("Could not create socket");
+    return -1;
+  }
+  puts("Socket created");
+
+
+  server.sin_addr.s_addr = inet_addr("127.0.0.1");
+  server.sin_family = AF_INET;
+  server.sin_port = htons(8889);
+
+  // Connect to remote server
+  if (connect(sock, (struct sockaddr *)&server, sizeof(server)) < 0) {
+    perror("connect failed. Error");
+    return -1;
+  }
+  puts("Connected\n");
+  return sock;
+}
+//-------------
+void startServer() {
+>>>>>>> Stashed changes
     int socket_desc, client_sock, c, read_size;
     struct sockaddr_in server, client;
 #if defined _WIN32
@@ -95,7 +139,7 @@ int startServer() {
     // Prepare the sockaddr_in structure
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons(8888);
+    server.sin_port = htons(8889);
     // Bind
     if (bind(socket_desc, (struct sockaddr *)&server, sizeof(server)) < 0) {
         // print the error message
@@ -133,8 +177,14 @@ int startServer() {
 int main(int argc, char* argv[]) {
 
     if (argc == 2) {
+<<<<<<< Updated upstream
         guardarDirectorio(argv[1]);
         readData();
+=======
+        startServer();
+    } else if (argc == 3) {
+        compararDirectorio(connectoServer());
+>>>>>>> Stashed changes
     }
 
 }
