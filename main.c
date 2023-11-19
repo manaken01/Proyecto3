@@ -27,13 +27,11 @@
 #define close(x) closesocket(x)
 #endif
 
-typedef struct fileInfo {
+struct fileInfo {
     char name[256]; // Nombre del archivo
     long size;      // Tamaño del archivo
-    char date[20];  // Última fecha de modificación (en formato de cadena)
-    int first;
-    struct fileInfo* next;
-} fileInfo;
+    char date[256];  // Última fecha de modificación (en formato de cadena)
+};
 
 struct dirent  *dp;
 struct stat     statbuf;
@@ -42,40 +40,22 @@ struct group   *grp;
 struct tm      *tm;
 char            datestring[256];
 
-void imprimirDirectorio(char *dirName) {
+void guardarDirectorio(char *dirName) {
     DIR *dir;
 	 
 	dir = opendir(".");
 	
     /* Loop through directory entries. */
     while ((dp = readdir(dir)) != NULL) {
-
+        struct fileInfo file;
         /* Get entry's information. */
         if (stat(dp->d_name, &statbuf) == -1)
             continue;
 
-        /* Print out type, permissions, and number of links. */
-        //printf("%10.10s", sperm (statbuf.st_mode));
-        printf("%4d", statbuf.st_nlink);
-
-        /* Print out owner's name if it is found using getpwuid(). */
-        if ((pwd = getpwuid(statbuf.st_uid)) != NULL)
-            printf(" %-8.8s", pwd->pw_name);
-        else
-            printf(" %-8d", statbuf.st_uid);
-
-        /* Print out group name if it is found using getgrgid(). */
-        if ((grp = getgrgid(statbuf.st_gid)) != NULL)
-            printf(" %-8.8s", grp->gr_name);
-        else
-            printf(" %-8d", statbuf.st_gid);
-
+        file.size = statbuf.st_size;
+        file.name = dp->d_name;
+        strftime(file.date, sizeof(file.date), nl_langinfo(D_T_FMT), tm);
         /* Print size of file. */
-        printf(" %9jd", (intmax_t)statbuf.st_size);
-        tm = localtime(&statbuf.st_mtime);
-        /* Get localized date string. */
-        strftime(datestring, sizeof(datestring), nl_langinfo(D_T_FMT), tm);
-        printf(" %s %s\n", datestring, dp->d_name);
     }
 }
 
