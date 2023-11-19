@@ -65,14 +65,15 @@ void guardarDirectorio(char *dirName) {
 
        if (stat(dp->d_name, &statbuf) == -1)
 	        continue;
+        if (dp->d_type != DT_DIR) {
+            file.size = statbuf.st_size;
+            strncpy(file.name, dp->d_name, sizeof(file.name) - 1);
 
-        file.size = statbuf.st_size;
-        strncpy(file.name, dp->d_name, sizeof(file.name) - 1);
-
-        tm = localtime(&statbuf.st_mtime);  // Se inicializa tm con la última fecha de modificación
-        strftime(file.date, sizeof(file.date), nl_langinfo(D_T_FMT), tm);
-        fwrite(&file, sizeof(file), 1, logs);
-        /* Print size of file. */
+            tm = localtime(&statbuf.st_mtime);  // Se inicializa tm con la última fecha de modificación
+            strftime(file.date, sizeof(file.date), nl_langinfo(D_T_FMT), tm);
+            fwrite(&file, sizeof(file), 1, logs);
+            /* Print size of file. */
+        }
     }
     closedir(dir);
     fclose(logs);
