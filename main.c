@@ -23,13 +23,14 @@
 #include <unistd.h>
 #include <stdlib.h>
 #endif
+
 #if defined _WIN32
 #define close(x) closesocket(x)
 #endif
 
 struct fileInfo {
     char name[256]; // Nombre del archivo
-    long size;      // Tamaño del archivo
+    intmax_t size;      // Tamaño del archivo
     char date[256];  // Última fecha de modificación (en formato de cadena)
 };
 
@@ -40,26 +41,44 @@ struct group   *grp;
 struct tm      *tm;
 char            datestring[256];
 
+void readData() { //Función para leer los datos
+    struct fileInfo file;
+    FILE *f = fopen("logs.txt", "rb"); //Se abre el archivo de modo que se pueda lockear y leer
+    while ((fread(&file, sizeof(struct fileInfo), 1, f)) > 0) {
+            printf("📄 %s - Tamaño: %ld - Creado el: %s\n",  
+            file.name, file.size, file.date); //Imprime el nombre, tamaño y fecha
+        printf("\n");
+    }
+    fclose(f);
+}
+
 void guardarDirectorio(char *dirName) {
-    DIR *dir;
-	 
-	dir = opendir(".");
-	
+	DIR *dir = opendir(dirName); //Se abre el directorio 
+	FILE* logs = fopen("logs.txt", "wb");
+     if (dir == NULL) {
+        perror("Error al abrir el directorio");
+        return;
+    }
     /* Loop through directory entries. */
     while ((dp = readdir(dir)) != NULL) {
         struct fileInfo file;
-        /* Get entry's information. */
-        if (stat(dp->d_name, &statbuf) == -1)
-            continue;
+
+       if (stat(dp->d_name, &statbuf) == -1)
+	        continue;
 
         file.size = statbuf.st_size;
-        file.name = dp->d_name;
+        strncpy(file.name, dp->d_name, sizeof(file.name) - 1);
+
+        tm = localtime(&statbuf.st_mtime);  // Se inicializa tm con la última fecha de modificación
         strftime(file.date, sizeof(file.date), nl_langinfo(D_T_FMT), tm);
+        fwrite(&file, sizeof(file), 1, logs);
         /* Print size of file. */
     }
+    closedir(dir);
+    fclose(logs);
 }
 
-void startServer() {
+int startServer() {
     int socket_desc, client_sock, c, read_size;
     struct sockaddr_in server, client;
 #if defined _WIN32
@@ -113,10 +132,8 @@ void startServer() {
 int main(int argc, char* argv[]) {
 
     if (argc == 2) {
-        startServer();
-    } else if (argc == 3) {
-
+        guardarDirectorio(argv[1]);
+        readData();
     }
-
 
 }
