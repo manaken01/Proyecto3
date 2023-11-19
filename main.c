@@ -27,17 +27,13 @@
 #define close(x) closesocket(x)
 #endif
 
-struct FileInfo {
+typedef struct fileInfo {
     char name[256]; // Nombre del archivo
     long size;      // Tamaño del archivo
     char date[20];  // Última fecha de modificación (en formato de cadena)
-};
-
-struct TreeNode {
-    struct FileInfo fileInfo;
-    struct TreeNode *child;  // Primer hijo
-    struct TreeNode *sibling;  // Siguiente hermano
-};
+    int first;
+    struct fileInfo* next;
+} fileInfo;
 
 struct dirent  *dp;
 struct stat     statbuf;
@@ -46,7 +42,7 @@ struct group   *grp;
 struct tm      *tm;
 char            datestring[256];
 
-void imprimirDirectorio(char *dirName, int identacion) {
+void imprimirDirectorio(char *dirName) {
     DIR *dir = opendir(dirName); //Se abre el directorio 
     while ((dp = readdir(dir)) != NULL) {
         if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0) //Se compara para saber si se esta dentro
@@ -129,9 +125,9 @@ void startServer() {
 
 int main(int argc, char* argv[]) {
 
-    if (argc == 1) {
+    if (argc == 2) {
         startServer();
-    } else if (argc == 2) {
+    } else if (argc == 3) {
 
     }
 
