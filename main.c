@@ -43,33 +43,40 @@ struct tm      *tm;
 char            datestring[256];
 
 void imprimirDirectorio(char *dirName) {
-    DIR *dir = opendir(dirName); //Se abre el directorio 
+    DIR *dir;
+	 
+	dir = opendir(".");
+	
+    /* Loop through directory entries. */
     while ((dp = readdir(dir)) != NULL) {
-        if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0) //Se compara para saber si se esta dentro
-            continue;                                                       //de un directorio o subdirectorio, si lo es continua
 
-        char path[1024];// Se inicializa la variable
-        strcpy(path, dirName); //Necesario para copiar el nombre de la ruta y comparar despues
-        strcat(path, "/");  //Agrega una barrita ya que son directorios 
-        strcat(path, dp->d_name); //Agrega el nombre del directorio actual al fi
+        /* Get entry's information. */
+        if (stat(dp->d_name, &statbuf) == -1)
+            continue;
 
-        if (stat(path, &statbuf) == -1)  //Si da error es que no se puede acceder a un archivo o un directorio
-            continue; //Continua con la siguiente recursion
+        /* Print out type, permissions, and number of links. */
+        //printf("%10.10s", sperm (statbuf.st_mode));
+        printf("%4d", statbuf.st_nlink);
 
-        for (int i = 0; i < identacion; i++) {
-            printf(" ");
-        }
+        /* Print out owner's name if it is found using getpwuid(). */
+        if ((pwd = getpwuid(statbuf.st_uid)) != NULL)
+            printf(" %-8.8s", pwd->pw_name);
+        else
+            printf(" %-8d", statbuf.st_uid);
 
-        if (dp->d_type == DT_DIR) { //Verifica si se encuentra en un directorio
-            printf("📁 %s\n", dp->d_name); //Imprime el directorio con un emoji de carpeta
-            imprimirDirectorio(path, identacion + 2); //Sigue buscando directorios, se aumenta la identación
-        } else {
-            tm = localtime(&statbuf.st_mtime);
-            strftime(datestring, sizeof(datestring), nl_langinfo(D_T_FMT), tm); //Saca la fecha que se creo
-            printf("📄 %s - Tamaño: %ld - Creado el: %s\n",  dp->d_name, (intmax_t)statbuf.st_size, datestring); //Imprime el nombre, tamaño y fecha
-        }
+        /* Print out group name if it is found using getgrgid(). */
+        if ((grp = getgrgid(statbuf.st_gid)) != NULL)
+            printf(" %-8.8s", grp->gr_name);
+        else
+            printf(" %-8d", statbuf.st_gid);
+
+        /* Print size of file. */
+        printf(" %9jd", (intmax_t)statbuf.st_size);
+        tm = localtime(&statbuf.st_mtime);
+        /* Get localized date string. */
+        strftime(datestring, sizeof(datestring), nl_langinfo(D_T_FMT), tm);
+        printf(" %s %s\n", datestring, dp->d_name);
     }
-    closedir(dir);
 }
 
 void startServer() {
