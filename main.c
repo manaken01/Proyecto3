@@ -167,7 +167,7 @@ void compararDirectorio(int sock, char *dirName){
     DIR *dir = opendir(dirName);
     FILE* logs = fopen("logs.txt", "rb");
     if (logs == NULL) {
-        guardarDirectorio(char *dirName);
+        guardarDirectorio(dirName);
         return;
     }else{
         readData();
@@ -223,7 +223,7 @@ void compararDirectorio(int sock, char *dirName){
     }
 }
 //----------- cliente
-int connectoServer(const char** ip){
+int connectoServer(char* ip){
   //crear socket para conectar con el servidor y lo retorna
   int sock;
   struct sockaddr_in server;
@@ -254,7 +254,7 @@ int connectoServer(const char** ip){
   return sock;
 }
 //-------------
-void startServer() {
+int startServer() {
     int socket_desc, client_sock, c, read_size;
     struct sockaddr_in server, client;
 #if defined _WIN32
@@ -310,7 +310,7 @@ int main(int argc, char* argv[]) {
    if (argc == 2) {
         startServer();
     }else if(argc == 3){
-        compararDirectorio(connectoServer(), argv[1]);
+        compararDirectorio(connectoServer(argv[2]), argv[1]);
     }
     return 0;
 
