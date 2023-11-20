@@ -74,16 +74,23 @@ void imprimirListaNoDirectorio() {
     }
 }
 
-void readData() { //Función para leer los datos
+void readData() {
     struct fileInfo file;
     contador = 0;
-    FILE *f = fopen("logs.txt", "rb"); //Se abre el archivo de modo que se pueda lockear y leer
-    while ((fread(&file, sizeof(struct fileInfo), 1, f)) > 0) {
+    FILE* f = fopen("logs.txt", "rb"); // Se abre el archivo de modo que se pueda lockear y leer
+
+    if (f == NULL) {
+        perror("Error al abrir el archivo de logs");
+        return;
+    }
+
+    while (fread(&file, sizeof(struct fileInfo), 1, f) > 0) {
         if (strcmp(file.name, "logs.txt") != 0) {
             struct listNoDirectory* newFile = (struct listNoDirectory*)malloc(sizeof(struct listNoDirectory));
-            snprintf(newFile->file.name, sizeof(newFile->file.name), "%s\n", file.name);
-            snprintf(newFile->file.date, sizeof(newFile->file.date), "%s\n", file.date);
+            snprintf(newFile->file.name, sizeof(newFile->file.name), "%s", file.name);
+            snprintf(newFile->file.date, sizeof(newFile->file.date), "%s", file.date);
             newFile->file.size = file.size;
+            newFile->next = NULL;
             if (listNoDirectoryHead == NULL) {
                 listNoDirectoryHead = newFile;
                 listNoDirectoryEnd = newFile;
@@ -91,35 +98,42 @@ void readData() { //Función para leer los datos
                 listNoDirectoryEnd->next = newFile;
                 listNoDirectoryEnd = newFile;
             }
+
             contador++;
         }
     }
+
     fclose(f);
 }
 
-void guardarDirectorio(char *dirName) {
-	DIR *dir = opendir(dirName); //Se abre el directorio 
-	FILE* logs = fopen("logs.txt", "wb");
-     if (dir == NULL) {
-        perror("Error al abrir el directorio");
+void guardarDirectorio(char* dirName) {
+    DIR* dir = opendir(dirName); // Se abre el directorio
+    FILE* logs = fopen("logs.txt", "wb");
+
+    if (dir == NULL || logs == NULL) {
+        perror("Error al abrir el directorio o el archivo de logs");
         return;
     }
+
     /* Loop through directory entries. */
     while ((dp = readdir(dir)) != NULL) {
         struct fileInfo file;
 
-       if (stat(dp->d_name, &statbuf) == -1)
-	        continue;
+        if (stat(dp->d_name, &statbuf) == -1)
+            continue;
+
         if (dp->d_type != DT_DIR) {
             file.size = statbuf.st_size;
             strncpy(file.name, dp->d_name, sizeof(file.name) - 1);
 
-            tm = localtime(&statbuf.st_mtime);  // Se inicializa tm con la última fecha de modificación
+            tm = localtime(&statbuf.st_mtime);
             strftime(file.date, sizeof(file.date), nl_langinfo(D_T_FMT), tm);
+
             fwrite(&file, sizeof(file), 1, logs);
             /* Print size of file. */
         }
     }
+
     closedir(dir);
     fclose(logs);
 }
@@ -183,5 +197,6 @@ int main(int argc, char* argv[]) {
         imprimirListaNoDirectorio();
         liberarListaNoDirectorio();
     }
+    return 0;
 
 }
