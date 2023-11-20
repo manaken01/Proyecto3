@@ -147,14 +147,16 @@ void guardarDirectorio(char* dirName) {
             continue;
 
         if (dp->d_type != DT_DIR) {
-            file.size = statbuf.st_size;
-            strncpy(file.name, dp->d_name, sizeof(file.name) - 1);
+            if (strcmp(dp->d_name,"logs.txt") != 0) {
+                file.size = statbuf.st_size;
+                strncpy(file.name, dp->d_name, sizeof(file.name) - 1);
 
-            tm = localtime(&statbuf.st_mtime);
-            strftime(file.date, sizeof(file.date), nl_langinfo(D_T_FMT), tm);
+                tm = localtime(&statbuf.st_mtime);
+                strftime(file.date, sizeof(file.date), nl_langinfo(D_T_FMT), tm);
 
-            fwrite(&file, sizeof(file), 1, logs);
-            /* Print size of file. */
+                fwrite(&file, sizeof(file), 1, logs);
+                /* Print size of file. */
+            }
         }
     }
 
@@ -181,32 +183,34 @@ void compararDirectorio(int sock, char *dirName){
         if (stat(dp->d_name, &statbuf) == -1)
                 continue;
             if (dp->d_type != DT_DIR) {
-                fileD.size = statbuf.st_size;
-                strncpy(fileD.name, dp->d_name, sizeof(fileD.name) - 1);
+                if (strcmp(dp->d_name,"logs.txt") != 0) {
+                    fileD.size = statbuf.st_size;
+                    strncpy(fileD.name, dp->d_name, sizeof(fileD.name) - 1);
 
-                tm = localtime(&statbuf.st_mtime);  // Se inicializa tm con la última fecha de modificación
-                strftime(fileD.date, sizeof(fileD.date), nl_langinfo(D_T_FMT), tm);
+                    tm = localtime(&statbuf.st_mtime);  // Se inicializa tm con la última fecha de modificación
+                    strftime(fileD.date, sizeof(fileD.date), nl_langinfo(D_T_FMT), tm);
 
-                int found = 0;
-                struct listNoDirectory* current = listNoDirectoryHead;
-                while (current != NULL) {
-                    if(strcmp(fileD.name,current->file.name) == 0){
-                        if(strcmp(fileD.date, current->file.date) != 0){
-                            //actualizar archivo
-                            printf("El archivo %s hay que actualizarlo \n", fileD.name);
+                    int found = 0;
+                    struct listNoDirectory* current = listNoDirectoryHead;
+                    while (current != NULL) {
+                        if(strcmp(fileD.name,current->file.name) == 0){
+                            if(strcmp(fileD.date, current->file.date) != 0){
+                                //actualizar archivo
+                                printf("El archivo %s hay que actualizarlo \n", fileD.name);
+                            }
+                            found = 1;
+                            //modificar la lista de los archivos que estan en los logs pero no en el directorio
+                            //borrarNodoListaNoDirectorio(current);
+                            contador--;
                         }
-                        found = 1;
-                        //modificar la lista de los archivos que estan en los logs pero no en el directorio
-                        borrarNodoListaNoDirectorio(current);
-                        contador--;
+                        current = current->next;
+                    }
+                    if (found == 0){
+                        //no lo encontro en los logs
+                        // es un archivo nuevo
+                        printf("No esta en los logs el archivo : %s \n", fileD.name);
                     }
                 }
-                if (found == 0){
-                    //no lo encontro en los logs
-                    // es un archivo nuevo
-                    printf("No esta en los logs el archivo : %s \n", fileD.name);
-                }
-                
             }
         }
 
@@ -310,7 +314,7 @@ int main(int argc, char* argv[]) {
    if (argc == 2) {
         startServer();
     }else if(argc == 3){
-        compararDirectorio(connectoServer(argv[2]), argv[1]);
+        compararDirectorio(5, argv[1]);
     }
     return 0;
 
