@@ -106,6 +106,30 @@ void readData() {
     fclose(f);
 }
 
+// Función para borrar un nodo de la lista
+void borrarNodoListaNoDirectorio(struct listNoDirectory* nodo) {
+    if (nodo == NULL) {
+        return; // No hay nada que borrar
+    }
+
+    if (nodo == listNoDirectoryHead) {
+        // Si el nodo a borrar es la cabeza de la lista
+        listNoDirectoryHead = listNoDirectoryHead->next;
+    } else {
+        // Si el nodo a borrar está en medio o al final de la lista
+        struct listNoDirectory* current = listNoDirectoryHead;
+        while (current != NULL && current->next != nodo) {
+            current = current->next;
+        }
+
+        if (current != NULL) {
+            current->next = nodo->next;
+        }
+    }
+
+    free(nodo); // Liberar la memoria del nodo borrado
+}
+
 void guardarDirectorio(char* dirName) {
     DIR* dir = opendir(dirName); // Se abre el directorio
     FILE* logs = fopen("logs.txt", "wb");
@@ -139,7 +163,6 @@ void guardarDirectorio(char* dirName) {
 }
 
 void compararDirectorio(int sock, char *dirName){
-    struct 
 
     DIR *dir = opendir(dirName);
     FILE* logs = fopen("logs.txt", "rb");
@@ -147,7 +170,7 @@ void compararDirectorio(int sock, char *dirName){
         guardarDirectorio(char *dirName);
         return;
     }else{
-
+        readData();
         /* Loop through directory entries. */
         // En este primer loop se compara por cada archivo del directorio si se encuentra en los logs
         //Caso 1: si se encuentra el archivo del directorio en los logs pero no se modificó
@@ -165,28 +188,36 @@ void compararDirectorio(int sock, char *dirName){
                 strftime(fileD.date, sizeof(fileD.date), nl_langinfo(D_T_FMT), tm);
 
                 int found = 0;
-                struct fileInfo fileL;
-                while ((fread(&fileL, sizeof(struct fileInfo), 1, logs)) > 0) {
-                    if(strcmp(fileD.name,fileL.name) == 0){
-                        if(strcmp(fileD.date, fileL.date) != 0){
+                struct listNoDirectory* current = listNoDirectoryHead;
+                while (current != NULL) {
+                    if(strcmp(fileD.name,current->file.name) == 0){
+                        if(strcmp(fileD.date, current->file.date) != 0){
                             //actualizar archivo
+                            printf("El archivo %s hay que actualizarlo \n", fileD.name);
                         }
                         found = 1;
+                        //modificar la lista de los archivos que estan en los logs pero no en el directorio
+                        borrarNodoListaNoDirectorio(current);
+                        contador--;
                     }
-                    
                 }
                 if (found == 0){
                     //no lo encontro en los logs
                     // es un archivo nuevo
+                    printf("No esta en los logs el archivo : %s \n", fileD.name);
                 }
                 
             }
         }
 
-        //Segundo loop, recorre los logs para encontrar si algun archivo y no existe en el directorio, significa que se eliminó
+        //Al final la slita deberia tener los nombres de los archivos que estan en los logs pero no en el directorio
+        //Por lo que se han borrado
+        if(contador > 0){
+            //while con funcion de borrar donde se mandan los archivos que deberian ser borrados del servidor
+            printf("Se borro #%i archivos \n", contador);
+        }
 
-
-
+        liberarListaNoDirectorio();
         closedir(dir);
         fclose(logs);
     }
@@ -277,10 +308,9 @@ void startServer() {
 int main(int argc, char* argv[]) {
 
    if (argc == 2) {
-        guardarDirectorio(argv[1]);
-        readData();
-        imprimirListaNoDirectorio();
-        liberarListaNoDirectorio();
+        startServer();
+    }else if(argc == 3){
+        compararDirectorio(connectoServer(), argv[1]);
     }
     return 0;
 
