@@ -339,7 +339,7 @@ void compararDirectorio(int sock, char *dirName){
 
 
 // Función para recibir un archivo del cliente
-void receive_file_serverSide(int client_socket) {
+void receive_file_serverSide(int client_socket,char *dirName) {
     // Recibir el tamaño del nombre del archivo
     size_t file_name_size;
     if (recv(client_socket, &file_name_size, sizeof(file_name_size), 0) == -1) {
@@ -354,13 +354,13 @@ void receive_file_serverSide(int client_socket) {
         return;
     }
     file_name[file_name_size] = '\0';
-
-    FILE* file = fopen(file_name, "wb");
+    char fullpath[PATH_MAX];
+    snprintf(fullpath, PATH_MAX, "%s/%s", dirName, file_name);
+    FILE* file = fopen(fullpath, "wb");
     if (file == NULL) {
         perror("Error al crear el archivo");
         return;
     }
-    printf("%s\n",file_name);
     // Recibir el tamaño del archivo del cliente
     long file_size;
     if (recv(client_socket, &file_size, sizeof(file_size), 0) == -1) {
@@ -425,7 +425,7 @@ int connectoServer(char* ip){
 }
 
 //-------------
-int startServer() {
+int startServer(char *dirName) {
     int socket_desc, client_sock, c, read_size;
     struct sockaddr_in server, client;
 #if defined _WIN32
@@ -464,12 +464,11 @@ int startServer() {
     puts("Connection accepted");
     // Receive a message from client
     struct MensajeCliente mensaje;
-    while(1) {
-        read_size = recv(client_sock, &mensaje, sizeof(mensaje), 0);
+    while ((read_size = recv(client_sock, &mensaje, sizeof(mensaje), 0)) > 0) {
         if (strcmp("crear", mensaje.proc) == 0) {
             const char* response = "Listo para recibir archivo";
             send(client_sock, response, strlen(response), 0);
-            receive_file_serverSide(client_sock);
+            receive_file_serverSide(client_sock,dirName);
         } 
     }
 
@@ -488,7 +487,7 @@ int startServer() {
 int main(int argc, char* argv[]) {
 
    if (argc == 2) {
-        startServer();
+        startServer(argv[1]);
     }else if(argc == 3){
         compararDirectorio(connectoServer(argv[2]), argv[1]);
     }
