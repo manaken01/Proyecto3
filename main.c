@@ -363,10 +363,10 @@ void compararDirectorio(int sock, char *dirName){
                             current = current->next;
                         }
                     }
-                    if (found == 0){
-                    send_file_clientSide(sock,fullpath2,dp->d_name);
-                    //no lo encontro en los logs
-                    // es un archivo nuevo
+                    if (found == 0) {
+                        send_file_clientSide(sock,fullpath2,dp->d_name);
+                        //no lo encontro en los logs
+                        // es un archivo nuevo
 
                     }
                 }
@@ -538,10 +538,9 @@ int startServer(char *dirName) {
             break;
         } 
     }
-    //guardarDirectorio(dirName);
-    //readData(dirName);
-    //imprimirListaNoDirectorio();
-    printf("HOLA\n");
+    guardarDirectorio(dirName);
+    readData(dirName);
+    imprimirListaNoDirectorio();
     compararDirectorio(client_sock,dirName);
     if (read_size == 0) {
         puts("Client disconnected");
@@ -580,6 +579,8 @@ int main(int argc, char* argv[]) {
             } 
         }
         guardarDirectorio(argv[1]);
+        readData(argv[1]);
+        imprimirListaNoDirectorio();
         close(sock);
     }
     return 0;
