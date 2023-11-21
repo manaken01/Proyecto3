@@ -363,6 +363,12 @@ void compararDirectorio(int sock, char *dirName){
                             current = current->next;
                         }
                     }
+                    if (found == 0){
+                    send_file_clientSide(sock,fullpath2,dp->d_name);
+                    //no lo encontro en los logs
+                    // es un archivo nuevo
+
+                    }
                 }
             }
         }
