@@ -91,10 +91,12 @@ void imprimirListaNoDirectorio() {
     }
 }
 
-void readData() {
+void readData(char* dirName) {
     struct fileInfo file;
     contador = 0;
-    FILE* f = fopen("logs.txt", "rb"); // Se abre el archivo de modo que se pueda lockear y leer
+    char fullpath[PATH_MAX];
+    snprintf(fullpath, PATH_MAX, "%s/%s", dirName, "logs.txt");
+    FILE* logs = fopen(fullpath, "rb");
 
     if (f == NULL) {
         perror("Error al abrir el archivo de logs");
@@ -284,24 +286,31 @@ void firstTime(int sock, char *dirName) {
 }
 
 void compararDirectorio(int sock, char *dirName){
-
-    FILE* logs = fopen("logs.txt", "rb");
     if (logs == NULL) {
         firstTime(sock,dirName);
         guardarDirectorio(dirName);
         return;
     }else{
         DIR *dir = opendir(dirName);
-        readData();
+        char fullpath[PATH_MAX];
+        snprintf(fullpath, PATH_MAX, "%s/%s", dirName, "logs.txt");
+        FILE* logs = fopen(fullpath, "rb");
+        readData(dirName);
         /* Loop through directory entries. */
         // En este primer loop se compara por cada archivo del directorio si se encuentra en los logs
         //Caso 1: si se encuentra el archivo del directorio en los logs pero no se modificó
         //Caso 1.2: si se encuentra el archivo del directorio en los logs y se modificó
         //Caso 2: si el archivo que se encuentra en el directorio no se encuentra en los logs es porque es nuevo, se crea el archivo
         while ((dp = readdir(dir)) != NULL) {
-        struct fileInfo fileD;
-        if (stat(dp->d_name, &statbuf) == -1)
+            struct fileInfo fileD;
+            if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0)
                 continue;
+
+            /* Get entry's information. */
+            if (lstat(fullpath, &statbuf) == -1) {
+                continue;
+            }
+                
             if (dp->d_type != DT_DIR) {
                 if (strcmp(dp->d_name,"logs.txt") != 0) {
                     fileD.size = statbuf.st_size;
