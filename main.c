@@ -149,7 +149,11 @@ void borrarNodoListaNoDirectorio(struct listNoDirectory* nodo) {
 
 void guardarDirectorio(char* dirName) {
     DIR* dir = opendir(dirName); // Se abre el directorio
-    FILE* logs = fopen("logs.txt", "wb");
+
+    char fullpath[PATH_MAX];
+    snprintf(fullpath, PATH_MAX, "%s/%s", dirName, "logs.txt");
+
+    FILE* logs = fopen(fullpath, "wb");
 
     if (dir == NULL || logs == NULL) {
         perror("Error al abrir el directorio o el archivo de logs");
@@ -160,8 +164,13 @@ void guardarDirectorio(char* dirName) {
     while ((dp = readdir(dir)) != NULL) {
         struct fileInfo file;
 
-        if (stat(dp->d_name, &statbuf) == -1)
+        if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0)
             continue;
+
+        /* Get entry's information. */
+        if (lstat(fullpath, &statbuf) == -1) {
+            continue;
+        }
 
         if (dp->d_type != DT_DIR) {
             if (strcmp(dp->d_name,"logs.txt") != 0) {
@@ -279,6 +288,7 @@ void compararDirectorio(int sock, char *dirName){
     FILE* logs = fopen("logs.txt", "rb");
     if (logs == NULL) {
         firstTime(sock,dirName);
+        guardarDirectorio(dirName);
         return;
     }else{
         DIR *dir = opendir(dirName);
@@ -471,6 +481,7 @@ int startServer(char *dirName) {
             receive_file_serverSide(client_sock,dirName);
         } 
     }
+    guardarDirectorio(dirName);
 
     if (read_size == 0) {
         puts("Client disconnected");
