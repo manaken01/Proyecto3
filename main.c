@@ -287,17 +287,18 @@ void firstTime(int sock, char *dirName) {
     closedir(dir);
 }
 
-void compararDirectorio(int sock, char *dirName){
+void compararDirectorio(int sock, char *dirName,int known){
     char fullpath[PATH_MAX];
     snprintf(fullpath, PATH_MAX, "%s/%s", dirName, "logs.txt");
     FILE* logs = fopen(fullpath, "rb");
     if (logs == NULL) {
+        fclose(logs);
         firstTime(sock,dirName);
         guardarDirectorio(dirName);
         readData(dirName);
         imprimirListaNoDirectorio();
         return;
-    }else{
+    } else {
         DIR *dir = opendir(dirName);
         readData(dirName);
         /* Loop through directory entries. */
@@ -329,22 +330,20 @@ void compararDirectorio(int sock, char *dirName){
                     int found = 0;
                     struct listNoDirectory* current = listNoDirectoryHead;
                     while (current != NULL) {
-                        if(strcmp(fileD.name,current->file.name) == 0){
-                            if(strcmp(fileD.date, current->file.date) != 0){
-                                //actualizar archivo
+                        if (strcmp(fileD.name, current->file.name) == 0) {
+                            if (strcmp(fileD.date, current->file.date) != 0) {
+                                // actualizar archivo
                                 printf("El archivo %s hay que actualizarlo \n", fileD.name);
                             }
                             found = 1;
-                            //modificar la lista de los archivos que estan en los logs pero no en el directorio
-                            //borrarNodoListaNoDirectorio(current);
+                            // modificar la lista de los archivos que están en los logs pero no en el directorio
+                            struct listNoDirectory* nextNode = current->next;  // Guardar el siguiente nodo antes de borrar el actual
+                            borrarNodoListaNoDirectorio(current);
                             contador--;
+                            current = nextNode;  // Actualizar current al siguiente nodo guardado
+                        } else {
+                            current = current->next;
                         }
-                        current = current->next;
-                    }
-                    if (found == 0){
-                        //no lo encontro en los logs
-                        // es un archivo nuevo
-                        printf("No esta en los logs el archivo : %s \n", fileD.name);
                     }
                 }
             }
@@ -352,9 +351,10 @@ void compararDirectorio(int sock, char *dirName){
 
         //Al final la slita deberia tener los nombres de los archivos que estan en los logs pero no en el directorio
         //Por lo que se han borrado
-        if(contador > 0){
+        if (contador > 0){
             //while con funcion de borrar donde se mandan los archivos que deberian ser borrados del servidor
             printf("Se borro #%i archivos \n", contador);
+            
         }
 
         liberarListaNoDirectorio();
@@ -496,6 +496,11 @@ int startServer(char *dirName) {
             send(client_sock, response, strlen(response), 0);
             receive_file_serverSide(client_sock,dirName);
         } 
+        if (strcmp("eliminar", mensaje.proc) == 0) {
+            const char* response = "Listo para eliminar archivo";
+            send(client_sock, response, strlen(response), 0);
+            receive_file_serverSide(client_sock,dirName);
+        } 
     }
     guardarDirectorio(dirName);
     readData(dirName);
@@ -517,7 +522,7 @@ int main(int argc, char* argv[]) {
    if (argc == 2) {
         startServer(argv[1]);
     }else if(argc == 3){
-        compararDirectorio(connectoServer(argv[2]), argv[1]);
+        compararDirectorio(connectoServer(argv[2]), argv[1],1);
     }
     return 0;
 
