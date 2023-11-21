@@ -98,12 +98,12 @@ void readData(char* dirName) {
     snprintf(fullpath, PATH_MAX, "%s/%s", dirName, "logs.txt");
     FILE* logs = fopen(fullpath, "rb");
 
-    if (f == NULL) {
+    if (logs == NULL) {
         perror("Error al abrir el archivo de logs");
         return;
     }
 
-    while (fread(&file, sizeof(struct fileInfo), 1, f) > 0) {
+    while (fread(&file, sizeof(struct fileInfo), 1, logs) > 0) {
         if (strcmp(file.name, "logs.txt") != 0) {
             struct listNoDirectory* newFile = (struct listNoDirectory*)malloc(sizeof(struct listNoDirectory));
             snprintf(newFile->file.name, sizeof(newFile->file.name), "%s", file.name);
@@ -122,7 +122,7 @@ void readData(char* dirName) {
         }
     }
 
-    fclose(f);
+    fclose(logs);
 }
 
 // Función para borrar un nodo de la lista
@@ -169,8 +169,11 @@ void guardarDirectorio(char* dirName) {
         if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0)
             continue;
 
+        char fullpath2[PATH_MAX];
+        snprintf(fullpath2, PATH_MAX, "%s/%s", dirName, dp->d_name);
+
         /* Get entry's information. */
-        if (lstat(fullpath, &statbuf) == -1) {
+        if (lstat(fullpath2, &statbuf) == -1) {
             continue;
         }
 
@@ -256,7 +259,6 @@ void send_file_clientSide(int client_socket, const char* file_path, const char* 
 
 
 void firstTime(int sock, char *dirName) {
-    printf("%s\n",dirName);
     DIR *dir = opendir(dirName);
     /* Loop through directory entries. */
     // En este primer loop se compara por cada archivo del directorio si se encuentra en los logs
@@ -279,22 +281,24 @@ void firstTime(int sock, char *dirName) {
         printf("%s\n",fullpath);
 
         if (dp->d_type != DT_DIR) {
-                send_file_clientSide(sock,fullpath,dp->d_name);
+            send_file_clientSide(sock,fullpath,dp->d_name);
         }
     }
     closedir(dir);
 }
 
 void compararDirectorio(int sock, char *dirName){
+    char fullpath[PATH_MAX];
+    snprintf(fullpath, PATH_MAX, "%s/%s", dirName, "logs.txt");
+    FILE* logs = fopen(fullpath, "rb");
     if (logs == NULL) {
         firstTime(sock,dirName);
         guardarDirectorio(dirName);
+        readData(dirName);
+        imprimirListaNoDirectorio();
         return;
     }else{
         DIR *dir = opendir(dirName);
-        char fullpath[PATH_MAX];
-        snprintf(fullpath, PATH_MAX, "%s/%s", dirName, "logs.txt");
-        FILE* logs = fopen(fullpath, "rb");
         readData(dirName);
         /* Loop through directory entries. */
         // En este primer loop se compara por cada archivo del directorio si se encuentra en los logs
@@ -306,8 +310,11 @@ void compararDirectorio(int sock, char *dirName){
             if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0)
                 continue;
 
+            char fullpath2[PATH_MAX];
+            snprintf(fullpath2, PATH_MAX, "%s/%s", dirName, dp->d_name);
+
             /* Get entry's information. */
-            if (lstat(fullpath, &statbuf) == -1) {
+            if (lstat(fullpath2, &statbuf) == -1) {
                 continue;
             }
                 
@@ -491,7 +498,8 @@ int startServer(char *dirName) {
         } 
     }
     guardarDirectorio(dirName);
-
+    readData(dirName);
+    imprimirListaNoDirectorio();
     if (read_size == 0) {
         puts("Client disconnected");
         fflush(stdout);
