@@ -59,15 +59,6 @@ struct group   *grp;
 struct tm      *tm;
 char            datestring[256];
 
-// Función para enviar un comando al servidor
-void send_command(int client_socket, const char* command) {
-    // Enviar el comando al servidor
-    if (send(client_socket, command, strlen(command), 0) == -1) {
-        perror("Error al enviar el comando al servidor");
-    }
-}
-
-
 void liberarListaNoDirectorio() {
     struct listNoDirectory* current = listNoDirectoryHead;
     struct listNoDirectory* next;
@@ -121,7 +112,6 @@ void readData(char* dirName) {
             contador++;
         }
     }
-
     fclose(logs);
 }
 
@@ -190,9 +180,40 @@ void guardarDirectorio(char* dirName) {
             }
         }
     }
-
     closedir(dir);
     fclose(logs);
+}
+
+void delete_file_clientSide(int client_socket, const char* file_name) {
+    struct MensajeCliente mensaje;
+    strncpy(mensaje.proc, "eliminar", sizeof(mensaje.proc)); //Copia el nombre de la funcion
+    send(client_socket, &mensaje, sizeof(mensaje), 0); //Envia el mensaje
+    // Espera la respuesta del servidor
+    char response[BUFFER_SIZE];
+    ssize_t bytes_received = recv(client_socket, response, sizeof(response) - 1, 0);
+    if (bytes_received == -1) {
+        perror("Error al recibir la respuesta del servidor");
+        exit(EXIT_FAILURE);
+    }
+    response[bytes_received] = '\0';
+    printf("Respuesta del servidor: %s\n", response);
+    strncpy(mensaje.proc, file_name, sizeof(mensaje.proc)); //Copia el nombre de la funcion
+    send(client_socket, &mensaje, sizeof(mensaje), 0); //Envia el mensaje
+}
+
+void delete_file_servSide(int client_socket,char *dirName) {
+    struct MensajeCliente mensaje;
+    // recibir el nombre del archivo a borrar
+    recv(client_socket, &mensaje, sizeof(mensaje), 0);
+    // Intenta eliminar el archivo
+    printf("%s\n",mensaje.proc);
+    char fullpath[PATH_MAX];
+    snprintf(fullpath, PATH_MAX, "%s/%s", dirName, mensaje.proc);
+    if (remove(fullpath) == 0) {
+        printf("El archivo \"%s\" se eliminó correctamente.\n", mensaje.proc);
+    } else {
+        perror("Error al intentar eliminar el archivo");
+    }
 }
 
 void send_file_clientSide(int client_socket, const char* file_path, const char* file_name) {
@@ -278,8 +299,6 @@ void firstTime(int sock, char *dirName) {
             continue;
         }
 
-        printf("%s\n",fullpath);
-
         if (dp->d_type != DT_DIR) {
             send_file_clientSide(sock,fullpath,dp->d_name);
         }
@@ -287,12 +306,11 @@ void firstTime(int sock, char *dirName) {
     closedir(dir);
 }
 
-void compararDirectorio(int sock, char *dirName,int known){
+void compararDirectorio(int sock, char *dirName){
     char fullpath[PATH_MAX];
     snprintf(fullpath, PATH_MAX, "%s/%s", dirName, "logs.txt");
     FILE* logs = fopen(fullpath, "rb");
     if (logs == NULL) {
-        fclose(logs);
         firstTime(sock,dirName);
         guardarDirectorio(dirName);
         readData(dirName);
@@ -354,9 +372,18 @@ void compararDirectorio(int sock, char *dirName,int known){
         if (contador > 0){
             //while con funcion de borrar donde se mandan los archivos que deberian ser borrados del servidor
             printf("Se borro #%i archivos \n", contador);
+            struct listNoDirectory* current = listNoDirectoryHead;
+            while (current != NULL) {
+                delete_file_clientSide(sock,current->file.name);
+                struct listNoDirectory* nextNode = current->next;  // Guardar el siguiente nodo antes de borrar el actual
+                borrarNodoListaNoDirectorio(current);
+                contador--;
+                current = nextNode;  // Actualizar current al siguiente nodo guardado
+            }
+            guardarDirectorio(dirName);
             
+   
         }
-
         liberarListaNoDirectorio();
         closedir(dir);
         fclose(logs);
@@ -499,12 +526,13 @@ int startServer(char *dirName) {
         if (strcmp("eliminar", mensaje.proc) == 0) {
             const char* response = "Listo para eliminar archivo";
             send(client_sock, response, strlen(response), 0);
-            receive_file_serverSide(client_sock,dirName);
+            delete_file_servSide(client_sock,dirName);
         } 
     }
-    guardarDirectorio(dirName);
-    readData(dirName);
-    imprimirListaNoDirectorio();
+    //guardarDirectorio(dirName);
+    //readData(dirName);
+    //imprimirListaNoDirectorio();
+    compararDirectorio(client_sock,dirName);
     if (read_size == 0) {
         puts("Client disconnected");
         fflush(stdout);
@@ -522,7 +550,24 @@ int main(int argc, char* argv[]) {
    if (argc == 2) {
         startServer(argv[1]);
     }else if(argc == 3){
-        compararDirectorio(connectoServer(argv[2]), argv[1],1);
+        int read_size;
+        int sock = connectoServer(argv[2]);
+        compararDirectorio(sock, argv[1]);
+        struct MensajeCliente mensaje;
+        sleep(0.1);
+        while ((read_size = recv(sock, &mensaje, sizeof(mensaje), 0)) > 0) {
+            if (strcmp("crear", mensaje.proc) == 0) {
+                const char* response = "Listo para recibir archivo";
+                send(sock, response, strlen(response), 0);
+                receive_file_serverSide(sock,argv[1]);
+            } 
+            if (strcmp("eliminar", mensaje.proc) == 0) {
+                const char* response = "Listo para eliminar archivo";
+                send(sock, response, strlen(response), 0);
+                receive_file_serverSide(sock,argv[1]);
+            } 
+        }
+        close(sock);
     }
     return 0;
 
