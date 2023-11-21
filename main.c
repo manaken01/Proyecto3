@@ -24,9 +24,17 @@
 #include <stdlib.h>
 #endif
 
+#define BUFFER_SIZE 1024
+
 #if defined _WIN32
 #define close(x) closesocket(x)
 #endif
+
+
+//Estructura para enviar mensajes del cliente
+struct MensajeCliente {
+    char proc[256];
+};
 
 struct fileInfo {
     char name[256]; // Nombre del archivo
@@ -50,6 +58,15 @@ struct passwd  *pwd;
 struct group   *grp;
 struct tm      *tm;
 char            datestring[256];
+
+// Función para enviar un comando al servidor
+void send_command(int client_socket, const char* command) {
+    // Enviar el comando al servidor
+    if (send(client_socket, command, strlen(command), 0) == -1) {
+        perror("Error al enviar el comando al servidor");
+    }
+}
+
 
 void liberarListaNoDirectorio() {
     struct listNoDirectory* current = listNoDirectoryHead;
@@ -164,14 +181,107 @@ void guardarDirectorio(char* dirName) {
     fclose(logs);
 }
 
+void send_file_clientSide(int client_socket, const char* file_path, const char* file_name) {
+
+    FILE* file = fopen(file_path, "rb");
+    if (file == NULL) {
+        perror("Error al abrir el archivo");
+        return;
+    }
+    struct MensajeCliente mensaje;
+    strncpy(mensaje.proc, "crear", sizeof(mensaje.proc)); //Copia el nombre de la funcion
+    send(client_socket, &mensaje, sizeof(mensaje), 0); //Envia el mensaje
+    // Espera la respuesta del servidor
+    char response[BUFFER_SIZE];
+    ssize_t bytes_received = recv(client_socket, response, sizeof(response) - 1, 0);
+    if (bytes_received == -1) {
+        perror("Error al recibir la respuesta del servidor");
+        exit(EXIT_FAILURE);
+    }
+    response[bytes_received] = '\0';
+    printf("Respuesta del servidor: %s\n", response);
+    // Obtener el tamaño del archivo
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    rewind(file);
+
+    // Obtener el tamaño del nombre del archivo
+    size_t file_name_size = strlen(file_name);
+
+    // Enviar el tamaño del nombre del archivo al servidor
+    if (send(client_socket, &file_name_size, sizeof(file_name_size), 0) == -1) {
+        perror("Error al enviar el tamaño del nombre del archivo");
+        fclose(file);
+        return;
+    }
+
+    // Enviar el nombre del archivo al servidor
+    if (send(client_socket, file_name, file_name_size, 0) == -1) {
+        perror("Error al enviar el nombre del archivo");
+        fclose(file);
+        return;
+    }
+
+    // Enviar el tamaño del archivo al servidor
+    if (send(client_socket, &file_size, sizeof(file_size), 0) == -1) {
+        perror("Error al enviar el tamaño del archivo");
+        fclose(file);
+        return;
+    }
+
+    // Enviar el contenido del archivo al servidor en bloques
+    char buffer[1024];
+    size_t bytes_read;
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        if (send(client_socket, buffer, bytes_read, 0) == -1) {
+            perror("Error al enviar el archivo");
+            fclose(file);
+            return;
+        }
+    }
+
+    fclose(file);
+}
+
+
+void firstTime(int sock, char *dirName) {
+    printf("%s\n",dirName);
+    DIR *dir = opendir(dirName);
+    /* Loop through directory entries. */
+    // En este primer loop se compara por cada archivo del directorio si se encuentra en los logs
+    //Caso 1: si se encuentra el archivo del directorio en los logs pero no se modificó
+    //Caso 1.2: si se encuentra el archivo del directorio en los logs y se modificó
+    //Caso 2: si el archivo que se encuentra en el directorio no se encuentra en los logs es porque es nuevo, se crea el archivo
+    while ((dp = readdir(dir)) != NULL) {
+       
+        if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0)
+            continue;
+        
+        char fullpath[PATH_MAX];
+        snprintf(fullpath, PATH_MAX, "%s/%s", dirName, dp->d_name);
+
+        /* Get entry's information. */
+        if (lstat(fullpath, &statbuf) == -1) {
+            continue;
+        }
+
+        printf("%s\n",fullpath);
+
+        if (dp->d_type != DT_DIR) {
+                send_file_clientSide(sock,fullpath,dp->d_name);
+        }
+    }
+    closedir(dir);
+}
+
 void compararDirectorio(int sock, char *dirName){
 
-    DIR *dir = opendir(dirName);
     FILE* logs = fopen("logs.txt", "rb");
     if (logs == NULL) {
-        guardarDirectorio(dirName);
+        firstTime(sock,dirName);
         return;
     }else{
+        DIR *dir = opendir(dirName);
         readData();
         /* Loop through directory entries. */
         // En este primer loop se compara por cada archivo del directorio si se encuentra en los logs
@@ -226,6 +336,62 @@ void compararDirectorio(int sock, char *dirName){
         fclose(logs);
     }
 }
+
+
+// Función para recibir un archivo del cliente
+void receive_file_serverSide(int client_socket) {
+    // Recibir el tamaño del nombre del archivo
+    size_t file_name_size;
+    if (recv(client_socket, &file_name_size, sizeof(file_name_size), 0) == -1) {
+        perror("Error al recibir el tamaño del nombre del archivo");
+        return;
+    }
+
+    // Recibir el nombre del archivo
+    char file_name[file_name_size + 1];
+    if (recv(client_socket, file_name, file_name_size, 0) == -1) {
+        perror("Error al recibir el nombre del archivo");
+        return;
+    }
+    file_name[file_name_size] = '\0';
+
+    FILE* file = fopen(file_name, "wb");
+    if (file == NULL) {
+        perror("Error al crear el archivo");
+        return;
+    }
+    printf("%s\n",file_name);
+    // Recibir el tamaño del archivo del cliente
+    long file_size;
+    if (recv(client_socket, &file_size, sizeof(file_size), 0) == -1) {
+        perror("Error al recibir el tamaño del archivo");
+        fclose(file);
+        return;
+    }
+
+    // Recibir el contenido del archivo en bloques y escribirlo en el archivo
+    char buffer[1024];
+    size_t bytes_received;
+    while (file_size > 0) {
+        size_t bytes_to_receive = sizeof(buffer);
+        if (file_size < sizeof(buffer)) {
+            bytes_to_receive = file_size;
+        }
+
+        bytes_received = recv(client_socket, buffer, bytes_to_receive, 0);
+        if (bytes_received == -1) {
+            perror("Error al recibir el archivo");
+            fclose(file);
+            return;
+        }
+
+        fwrite(buffer, 1, bytes_received, file);
+        file_size -= bytes_received;
+    }
+
+    fclose(file);
+}
+
 //----------- cliente
 int connectoServer(char* ip){
   //crear socket para conectar con el servidor y lo retorna
@@ -257,6 +423,7 @@ int connectoServer(char* ip){
   puts("Connected\n");
   return sock;
 }
+
 //-------------
 int startServer() {
     int socket_desc, client_sock, c, read_size;
@@ -296,6 +463,15 @@ int startServer() {
     }
     puts("Connection accepted");
     // Receive a message from client
+    struct MensajeCliente mensaje;
+    while(1) {
+        read_size = recv(client_sock, &mensaje, sizeof(mensaje), 0);
+        if (strcmp("crear", mensaje.proc) == 0) {
+            const char* response = "Listo para recibir archivo";
+            send(client_sock, response, strlen(response), 0);
+            receive_file_serverSide(client_sock);
+        } 
+    }
 
     if (read_size == 0) {
         puts("Client disconnected");
@@ -314,7 +490,7 @@ int main(int argc, char* argv[]) {
    if (argc == 2) {
         startServer();
     }else if(argc == 3){
-        compararDirectorio(5, argv[1]);
+        compararDirectorio(connectoServer(argv[2]), argv[1]);
     }
     return 0;
 
