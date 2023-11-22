@@ -139,6 +139,49 @@ void borrarNodoListaNoDirectorio(struct listNoDirectory* nodo) {
     free(nodo); // Liberar la memoria del nodo borrado
 }
 
+void comprobarConflictivos(char* filename, char* dirName){
+    char fullpath2[PATH_MAX];
+    snprintf(fullpath2, PATH_MAX, "%s/%s", dirName, filename);
+
+    /* Get entry's information. */
+    lstat(fullpath2, &statbuf);
+
+    struct fileInfo fileS;
+    readData(dirName);
+
+    tm = localtime(&statbuf.st_mtime);  // Se inicializa tm con la última fecha de modificación
+    strftime(fileS.date, sizeof(fileS.date), nl_langinfo(D_T_FMT), tm);
+
+    strncpy(fileS.name,filename, sizeof(fileS.name) - 1);
+
+    struct listNoDirectory* current = listNoDirectoryHead;
+    while (current != NULL) {
+        if (strcmp(fileS.name, current->file.name) == 0) {
+            if (strcmp(fileS.date, current->file.date) != 0) {
+                char newName[256];
+                snprintf(newName, 256,"%s_%s", "(1)",filename);
+
+                char newFullPath[PATH_MAX];
+                snprintf(newFullPath, PATH_MAX, "%s/%s", dirName, newName);
+                if (rename(fullpath2, newFullPath) == 0) {
+                    printf("El archivo se ha renombrado exitosamente.\n");
+                   
+                } else {
+                    perror("Error al intentar renombrar el archivo");
+                }
+                
+                printf("El archivo %s hay que actualizarlo \n", fileS.name);
+            }
+            break;
+        } else {
+            current = current->next;
+        }
+    
+    }
+    liberarListaNoDirectorio();
+
+}
+
 void guardarDirectorio(char* dirName) {
     DIR* dir = opendir(dirName); // Se abre el directorio
 
@@ -348,8 +391,15 @@ void compararDirectorio(int sock, char *dirName){
                     while (current != NULL) {
                         if (strcmp(fileD.name, current->file.name) == 0) {
                             if (strcmp(fileD.date, current->file.date) != 0) {
-                                // actualizar archivo
-                                printf("El archivo %s hay que actualizarlo \n", fileD.name);
+
+                                struct MensajeCliente mensaje;
+                                strncpy(mensaje.proc, "modificar", sizeof(mensaje.proc)); //Copia el nombre de la funcion
+                                send(sock, &mensaje, sizeof(mensaje), 0); //Envia el mensaje
+
+                                strncpy(mensaje.proc, fileD.name, sizeof(mensaje.proc)); //Copia el nombre de la funcion
+                                send(sock, &mensaje, sizeof(mensaje), 0); //Envia el mensaje
+
+                                send_file_clientSide(sock,fullpath2,dp->d_name);
                             }
                             found = 1;
                             // modificar la lista de los archivos que están en los logs pero no en el directorio
@@ -528,6 +578,10 @@ int startServer(char *dirName) {
             const char* response = "Listo para eliminar archivo";
             send(client_sock, response, strlen(response), 0);
             delete_file_servSide(client_sock,dirName);
+        } 
+        if (strcmp("modificar", mensaje.proc) == 0) {
+            recv(client_sock, &mensaje, sizeof(mensaje), 0);
+            comprobarConflictivos(mensaje.proc, dirName);
         } 
         if (strcmp("break", mensaje.proc) == 0) {
             break;
