@@ -215,6 +215,49 @@ void delete_file_servSide(int client_socket,char *dirName) {
         perror("Error al intentar eliminar el archivo");
     }
 }
+void comprobarConflictivos(char* filename, char* dirName){
+    char fullpath2[PATH_MAX];
+    snprintf(fullpath2, PATH_MAX, "%s/%s", dirName, filename);
+
+    /* Get entry's information. */
+    if (lstat(fullpath2, &statbuf) == -1) {
+        continue;
+    }
+
+    struct fileInfo fileS;
+    readData(char* dirName);
+
+    tm = localtime(&statbuf.st_mtime);  // Se inicializa tm con la última fecha de modificación
+    strftime(fileS.date, sizeof(fileS.date), nl_langinfo(D_T_FMT), tm);
+
+    strncpy(fileS.name,filename, sizeof(fileS.name) - 1);
+
+
+    struct listNoDirectory* current = listNoDirectoryHead;
+    while (current != NULL) {
+        if (strcmp(fileS.name, current->file.name) == 0) {
+            if (strcmp(fileS.date, current->file.date) != 0) {
+                char newName[256];
+                snprintf(newName, 256,"%s_%s", filename,"1");
+                if (rename(fullpath2, newName) == 0) {
+                    printf("El archivo se ha renombrado exitosamente.\n");
+                   
+                } else {
+                    perror("Error al intentar renombrar el archivo");
+                }
+                
+                printf("El archivo %s hay que actualizarlo \n", fileS.name);
+            }
+            break;
+        } else {
+            current = current->next;
+        }
+    
+    }
+    liberarListaNoDirectorio();
+
+}
+
 
 void send_file_clientSide(int client_socket, const char* file_path, const char* file_name) {
 
@@ -350,8 +393,17 @@ void compararDirectorio(int sock, char *dirName){
                     while (current != NULL) {
                         if (strcmp(fileD.name, current->file.name) == 0) {
                             if (strcmp(fileD.date, current->file.date) != 0) {
-                                // actualizar archivo
-                                printf("El archivo %s hay que actualizarlo \n", fileD.name);
+                                // Se debe acrualizar el archivo 
+
+                                struct MensajeCliente mensaje;
+                                strncpy(mensaje.proc, "modificar", sizeof(mensaje.proc)); //Copia el nombre de la funcion
+                                send(sock, &mensaje, sizeof(mensaje), 0); //Envia el mensaje
+
+                                strncpy(mensaje.proc, fileD.name, sizeof(mensaje.proc)); //Copia el nombre de la funcion
+                                send(sock, &mensaje, sizeof(mensaje), 0); //Envia el mensaje
+
+                                send_file_clientSide(sock,fullpath2,dp->d_name);
+
                             }
                             found = 1;
                             // modificar la lista de los archivos que están en los logs pero no en el directorio
@@ -533,6 +585,12 @@ int startServer(char *dirName) {
             const char* response = "Listo para eliminar archivo";
             send(client_sock, response, strlen(response), 0);
             delete_file_servSide(client_sock,dirName);
+        } 
+        if (strcmp("modificar", mensaje.proc) == 0) {
+            recv(client_sock, &mensaje, sizeof(mensaje));
+            comprobarConflictivos(mensaje.proc, dirName);
+            receive_file_serverSide(client_sock,dirName);
+
         } 
         if (strcmp("break", mensaje.proc) == 0) {
             break;
