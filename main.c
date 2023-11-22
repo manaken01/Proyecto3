@@ -31,8 +31,8 @@
 #endif
 
 
-//Estructura para enviar mensajes del cliente
-struct MensajeCliente {
+//Estructura para enviar messagges del cliente
+struct clientMessagge {
     char proc[256];
 };
 
@@ -50,7 +50,7 @@ struct listNoDirectory {
 // Puntero a la cabeza de la lista de archivos que estan en el log pero no en el directorio
 struct listNoDirectory* listNoDirectoryHead = NULL;
 struct listNoDirectory* listNoDirectoryEnd = NULL; // Puntero al final de la lista de archivos que estan en el log pero no en el directorio
-int contador;
+int counter;
 
 struct dirent  *dp;
 struct stat     statbuf;
@@ -59,7 +59,7 @@ struct group   *grp;
 struct tm      *tm;
 char            datestring[256];
 
-void liberarListaNoDirectorio() {
+void freeListNoDirectory() {
     struct listNoDirectory* current = listNoDirectoryHead;
     struct listNoDirectory* next;
 
@@ -73,7 +73,7 @@ void liberarListaNoDirectorio() {
     listNoDirectoryEnd = NULL;
 }
 
-void imprimirListaNoDirectorio() {
+void printListNoDirectory() {
     struct listNoDirectory* current = listNoDirectoryHead;
 
     while (current != NULL) {
@@ -84,7 +84,7 @@ void imprimirListaNoDirectorio() {
 
 void readData(char* dirName) {
     struct fileInfo file;
-    contador = 0;
+    counter = 0;
     char fullpath[PATH_MAX];
     snprintf(fullpath, PATH_MAX, "%s/%s", dirName, "logs.txt");
     FILE* logs = fopen(fullpath, "rb");
@@ -109,37 +109,80 @@ void readData(char* dirName) {
                 listNoDirectoryEnd = newFile;
             }
 
-            contador++;
+            counter++;
         }
     }
     fclose(logs);
 }
 
 // Función para borrar un nodo de la lista
-void borrarNodoListaNoDirectorio(struct listNoDirectory* nodo) {
-    if (nodo == NULL) {
+void deleteNodeListNoDirectory(struct listNoDirectory* node) {
+    if (node == NULL) {
         return; // No hay nada que borrar
     }
 
-    if (nodo == listNoDirectoryHead) {
+    if (node == listNoDirectoryHead) {
         // Si el nodo a borrar es la cabeza de la lista
         listNoDirectoryHead = listNoDirectoryHead->next;
     } else {
         // Si el nodo a borrar está en medio o al final de la lista
         struct listNoDirectory* current = listNoDirectoryHead;
-        while (current != NULL && current->next != nodo) {
+        while (current != NULL && current->next != node) {
             current = current->next;
         }
 
         if (current != NULL) {
-            current->next = nodo->next;
+            current->next = node->next;
         }
     }
 
-    free(nodo); // Liberar la memoria del nodo borrado
+    free(node); // Liberar la memoria del nodo borrado
 }
 
-void guardarDirectorio(char* dirName) {
+void checkConflicts(char* filename, char* dirName){
+    char fullpath2[PATH_MAX];
+    snprintf(fullpath2, PATH_MAX, "%s/%s", dirName, filename);
+
+    /* Get entry's information. */
+    lstat(fullpath2, &statbuf);
+
+    struct fileInfo fileS;
+    readData(dirName);
+
+    tm = localtime(&statbuf.st_mtime);  // Se inicializa tm con la última fecha de modificación
+    strftime(fileS.date, sizeof(fileS.date), nl_langinfo(D_T_FMT), tm);
+
+    strncpy(fileS.name,filename, sizeof(fileS.name) - 1);
+
+    struct listNoDirectory* current = listNoDirectoryHead;
+    while (current != NULL) {
+        if (strcmp(fileS.name, current->file.name) == 0) {
+            if (strcmp(fileS.date, current->file.date) != 0) {
+                char newName[256];
+                snprintf(newName, 256,"%s_%s", "(1)",filename);
+
+                char newFullPath[PATH_MAX];
+                snprintf(newFullPath, PATH_MAX, "%s/%s", dirName, newName);
+                if (rename(fullpath2, newFullPath) == 0) {
+                    printf("El archivo se ha renombrado exitosamente.\n");
+                   
+                } else {
+                    perror("Error al intentar renombrar el archivo");
+                }
+                
+                printf("El archivo %s hay que actualizarlo \n", fileS.name);
+            }
+            break;
+        } else {
+            current = current->next;
+        }
+    
+    }
+    freeListNoDirectory();
+
+}
+
+void saveDirectory(char* dirName) {
     DIR* dir = opendir(dirName); // Se abre el directorio
 
     char fullpath[PATH_MAX];
@@ -184,124 +227,81 @@ void guardarDirectorio(char* dirName) {
     fclose(logs);
 }
 
-void delete_file_clientSide(int client_socket, const char* file_name) {
-    struct MensajeCliente mensaje;
-    strncpy(mensaje.proc, "eliminar", sizeof(mensaje.proc)); //Copia el nombre de la funcion
-    send(client_socket, &mensaje, sizeof(mensaje), 0); //Envia el mensaje
+void deleteFile(int clientSocket, const char* fileName) {
+    struct clientMessagge messagge;
+    strncpy(messagge.proc, "eliminar", sizeof(messagge.proc)); //Copia el nombre de la funcion
+    send(clientSocket, &messagge, sizeof(messagge), 0); //Envia el messagge
     // Espera la respuesta del servidor
     char response[BUFFER_SIZE];
-    ssize_t bytes_received = recv(client_socket, response, sizeof(response) - 1, 0);
-    if (bytes_received == -1) {
+    ssize_t bytesReceived = recv(clientSocket, response, sizeof(response) - 1, 0);
+    if (bytesReceived == -1) {
         perror("Error al recibir la respuesta del servidor");
         exit(EXIT_FAILURE);
     }
-    response[bytes_received] = '\0';
+    response[bytesReceived] = '\0';
     printf("Respuesta del servidor: %s\n", response);
-    strncpy(mensaje.proc, file_name, sizeof(mensaje.proc)); //Copia el nombre de la funcion
-    send(client_socket, &mensaje, sizeof(mensaje), 0); //Envia el mensaje
+    strncpy(messagge.proc, fileName, sizeof(messagge.proc)); //Copia el nombre de la funcion
+    send(clientSocket, &messagge, sizeof(messagge), 0); //Envia el messagge
 }
 
-void delete_file_servSide(int client_socket,char *dirName) {
-    struct MensajeCliente mensaje;
+void receiveDeleteFile(int clientSocket,char *dirName) {
+    struct clientMessagge messagge;
     // recibir el nombre del archivo a borrar
-    recv(client_socket, &mensaje, sizeof(mensaje), 0);
+    recv(clientSocket, &messagge, sizeof(messagge), 0);
     // Intenta eliminar el archivo
-    printf("%s\n",mensaje.proc);
+    printf("%s\n",messagge.proc);
     char fullpath[PATH_MAX];
-    snprintf(fullpath, PATH_MAX, "%s/%s", dirName, mensaje.proc);
+    snprintf(fullpath, PATH_MAX, "%s/%s", dirName, messagge.proc);
     if (remove(fullpath) == 0) {
-        printf("El archivo \"%s\" se eliminó correctamente.\n", mensaje.proc);
+        printf("El archivo \"%s\" se eliminó correctamente.\n", messagge.proc);
     } else {
         perror("Error al intentar eliminar el archivo");
     }
 }
-void comprobarConflictivos(char* filename, char* dirName){
-    char fullpath2[PATH_MAX];
-    snprintf(fullpath2, PATH_MAX, "%s/%s", dirName, filename);
 
-    /* Get entry's information. */
-    if (lstat(fullpath2, &statbuf) == -1) {
-        continue;
-    }
+void sendFile(int clientSocket, const char* filePath, const char* fileName) {
 
-    struct fileInfo fileS;
-    readData(char* dirName);
-
-    tm = localtime(&statbuf.st_mtime);  // Se inicializa tm con la última fecha de modificación
-    strftime(fileS.date, sizeof(fileS.date), nl_langinfo(D_T_FMT), tm);
-
-    strncpy(fileS.name,filename, sizeof(fileS.name) - 1);
-
-
-    struct listNoDirectory* current = listNoDirectoryHead;
-    while (current != NULL) {
-        if (strcmp(fileS.name, current->file.name) == 0) {
-            if (strcmp(fileS.date, current->file.date) != 0) {
-                char newName[256];
-                snprintf(newName, 256,"%s_%s", filename,"1");
-                if (rename(fullpath2, newName) == 0) {
-                    printf("El archivo se ha renombrado exitosamente.\n");
-                   
-                } else {
-                    perror("Error al intentar renombrar el archivo");
-                }
-                
-                printf("El archivo %s hay que actualizarlo \n", fileS.name);
-            }
-            break;
-        } else {
-            current = current->next;
-        }
-    
-    }
-    liberarListaNoDirectorio();
-
-}
-
-
-void send_file_clientSide(int client_socket, const char* file_path, const char* file_name) {
-
-    FILE* file = fopen(file_path, "rb");
+    FILE* file = fopen(filePath, "rb");
     if (file == NULL) {
         perror("Error al abrir el archivo");
         return;
     }
-    struct MensajeCliente mensaje;
-    strncpy(mensaje.proc, "crear", sizeof(mensaje.proc)); //Copia el nombre de la funcion
-    send(client_socket, &mensaje, sizeof(mensaje), 0); //Envia el mensaje
+    struct clientMessagge messagge;
+    strncpy(messagge.proc, "crear", sizeof(messagge.proc)); //Copia el nombre de la funcion
+    send(clientSocket, &messagge, sizeof(messagge), 0); //Envia el messagge
     // Espera la respuesta del servidor
     char response[BUFFER_SIZE];
-    ssize_t bytes_received = recv(client_socket, response, sizeof(response) - 1, 0);
-    if (bytes_received == -1) {
+    ssize_t bytesReceived = recv(clientSocket, response, sizeof(response) - 1, 0);
+    if (bytesReceived == -1) {
         perror("Error al recibir la respuesta del servidor");
         exit(EXIT_FAILURE);
     }
-    response[bytes_received] = '\0';
+    response[bytesReceived] = '\0';
     printf("Respuesta del servidor: %s\n", response);
     // Obtener el tamaño del archivo
     fseek(file, 0, SEEK_END);
-    long file_size = ftell(file);
+    long fileSize = ftell(file);
     rewind(file);
 
     // Obtener el tamaño del nombre del archivo
-    size_t file_name_size = strlen(file_name);
+    size_t fileName_size = strlen(fileName);
 
     // Enviar el tamaño del nombre del archivo al servidor
-    if (send(client_socket, &file_name_size, sizeof(file_name_size), 0) == -1) {
+    if (send(clientSocket, &fileName_size, sizeof(fileName_size), 0) == -1) {
         perror("Error al enviar el tamaño del nombre del archivo");
         fclose(file);
         return;
     }
 
     // Enviar el nombre del archivo al servidor
-    if (send(client_socket, file_name, file_name_size, 0) == -1) {
+    if (send(clientSocket, fileName, fileName_size, 0) == -1) {
         perror("Error al enviar el nombre del archivo");
         fclose(file);
         return;
     }
 
     // Enviar el tamaño del archivo al servidor
-    if (send(client_socket, &file_size, sizeof(file_size), 0) == -1) {
+    if (send(clientSocket, &fileSize, sizeof(fileSize), 0) == -1) {
         perror("Error al enviar el tamaño del archivo");
         fclose(file);
         return;
@@ -309,9 +309,9 @@ void send_file_clientSide(int client_socket, const char* file_path, const char* 
 
     // Enviar el contenido del archivo al servidor en bloques
     char buffer[1024];
-    size_t bytes_read;
-    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
-        if (send(client_socket, buffer, bytes_read, 0) == -1) {
+    size_t bytesRead;
+    while ((bytesRead = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        if (send(clientSocket, buffer, bytesRead, 0) == -1) {
             perror("Error al enviar el archivo");
             fclose(file);
             return;
@@ -343,21 +343,19 @@ void firstTime(int sock, char *dirName) {
         }
 
         if (dp->d_type != DT_DIR) {
-            send_file_clientSide(sock,fullpath,dp->d_name);
+            sendFile(sock,fullpath,dp->d_name);
         }
     }
     closedir(dir);
 }
 
-void compararDirectorio(int sock, char *dirName){
+void checkDirectory(int sock, char *dirName){
     char fullpath[PATH_MAX];
     snprintf(fullpath, PATH_MAX, "%s/%s", dirName, "logs.txt");
     FILE* logs = fopen(fullpath, "rb");
     if (logs == NULL) {
         firstTime(sock,dirName);
-        guardarDirectorio(dirName);
-        readData(dirName);
-        imprimirListaNoDirectorio();
+        saveDirectory(dirName);
         return;
     } else {
         DIR *dir = opendir(dirName);
@@ -393,30 +391,28 @@ void compararDirectorio(int sock, char *dirName){
                     while (current != NULL) {
                         if (strcmp(fileD.name, current->file.name) == 0) {
                             if (strcmp(fileD.date, current->file.date) != 0) {
-                                // Se debe acrualizar el archivo 
+                                //Se actualiza el archivo
+                                struct clientMessagge messagge;
+                                strncpy(messagge.proc, "modificar", sizeof(messagge.proc)); //Copia el nombre de la funcion
+                                send(sock, &messagge, sizeof(messagge), 0); //Envia el messagge
 
-                                struct MensajeCliente mensaje;
-                                strncpy(mensaje.proc, "modificar", sizeof(mensaje.proc)); //Copia el nombre de la funcion
-                                send(sock, &mensaje, sizeof(mensaje), 0); //Envia el mensaje
+                                strncpy(messagge.proc, fileD.name, sizeof(messagge.proc)); //Copia el nombre de la funcion
+                                send(sock, &messagge, sizeof(messagge), 0); //Envia el messagge
 
-                                strncpy(mensaje.proc, fileD.name, sizeof(mensaje.proc)); //Copia el nombre de la funcion
-                                send(sock, &mensaje, sizeof(mensaje), 0); //Envia el mensaje
-
-                                send_file_clientSide(sock,fullpath2,dp->d_name);
-
+                                sendFile(sock,fullpath2,dp->d_name);
                             }
                             found = 1;
                             // modificar la lista de los archivos que están en los logs pero no en el directorio
-                            struct listNoDirectory* nextNode = current->next;  // Guardar el siguiente nodo antes de borrar el actual
-                            borrarNodoListaNoDirectorio(current);
-                            contador--;
-                            current = nextNode;  // Actualizar current al siguiente nodo guardado
+                            struct listNoDirectory* nextNode = current->next;  // Guardar el siguiente node antes de borrar el actual
+                            deleteNodeListNoDirectory(current);
+                            counter--;
+                            current = nextNode;  // Actualizar current al siguiente node guardado
                         } else {
                             current = current->next;
                         }
                     }
                     if (found == 0) {
-                        send_file_clientSide(sock,fullpath2,dp->d_name);
+                        sendFile(sock,fullpath2,dp->d_name);
                         //no lo encontro en los logs
                         // es un archivo nuevo
 
@@ -425,24 +421,21 @@ void compararDirectorio(int sock, char *dirName){
             }
         }
 
-        //Al final la slita deberia tener los nombres de los archivos que estan en los logs pero no en el directorio
+        //Al final la lita deberia tener los nombres de los archivos que estan en los logs pero no en el directorio
         //Por lo que se han borrado
-        if (contador > 0){
+        if (counter > 0){
             //while con funcion de borrar donde se mandan los archivos que deberian ser borrados del servidor
-            printf("Se borro #%i archivos \n", contador);
+            printf("Se borro #%i archivos \n", counter);
             struct listNoDirectory* current = listNoDirectoryHead;
             while (current != NULL) {
-                delete_file_clientSide(sock,current->file.name);
-                struct listNoDirectory* nextNode = current->next;  // Guardar el siguiente nodo antes de borrar el actual
-                borrarNodoListaNoDirectorio(current);
-                contador--;
-                current = nextNode;  // Actualizar current al siguiente nodo guardado
+                deleteFile(sock,current->file.name);
+                struct listNoDirectory* nextNode = current->next;  // Guardar el siguiente node antes de borrar el actual
+                deleteNodeListNoDirectory(current);
+                counter--;
+                current = nextNode;  // Actualizar current al siguiente node guardado
             }
-            guardarDirectorio(dirName);
-            
-   
         }
-        liberarListaNoDirectorio();
+        freeListNoDirectory();
         closedir(dir);
         fclose(logs);
     }
@@ -450,31 +443,31 @@ void compararDirectorio(int sock, char *dirName){
 
 
 // Función para recibir un archivo del cliente
-void receive_file_serverSide(int client_socket,char *dirName) {
+void receiveFile(int clientSocket,char *dirName) {
     // Recibir el tamaño del nombre del archivo
-    size_t file_name_size;
-    if (recv(client_socket, &file_name_size, sizeof(file_name_size), 0) == -1) {
+    size_t fileName_size;
+    if (recv(clientSocket, &fileName_size, sizeof(fileName_size), 0) == -1) {
         perror("Error al recibir el tamaño del nombre del archivo");
         return;
     }
 
     // Recibir el nombre del archivo
-    char file_name[file_name_size + 1];
-    if (recv(client_socket, file_name, file_name_size, 0) == -1) {
+    char fileName[fileName_size + 1];
+    if (recv(clientSocket, fileName, fileName_size, 0) == -1) {
         perror("Error al recibir el nombre del archivo");
         return;
     }
-    file_name[file_name_size] = '\0';
+    fileName[fileName_size] = '\0';
     char fullpath[PATH_MAX];
-    snprintf(fullpath, PATH_MAX, "%s/%s", dirName, file_name);
+    snprintf(fullpath, PATH_MAX, "%s/%s", dirName, fileName);
     FILE* file = fopen(fullpath, "wb");
     if (file == NULL) {
         perror("Error al crear el archivo");
         return;
     }
     // Recibir el tamaño del archivo del cliente
-    long file_size;
-    if (recv(client_socket, &file_size, sizeof(file_size), 0) == -1) {
+    long fileSize;
+    if (recv(clientSocket, &fileSize, sizeof(fileSize), 0) == -1) {
         perror("Error al recibir el tamaño del archivo");
         fclose(file);
         return;
@@ -482,22 +475,22 @@ void receive_file_serverSide(int client_socket,char *dirName) {
 
     // Recibir el contenido del archivo en bloques y escribirlo en el archivo
     char buffer[1024];
-    size_t bytes_received;
-    while (file_size > 0) {
-        size_t bytes_to_receive = sizeof(buffer);
-        if (file_size < sizeof(buffer)) {
-            bytes_to_receive = file_size;
+    size_t bytesReceived;
+    while (fileSize > 0) {
+        size_t bytesToReceive = sizeof(buffer);
+        if (fileSize < sizeof(buffer)) {
+            bytesToReceive = fileSize;
         }
 
-        bytes_received = recv(client_socket, buffer, bytes_to_receive, 0);
-        if (bytes_received == -1) {
+        bytesReceived = recv(clientSocket, buffer, bytesToReceive, 0);
+        if (bytesReceived == -1) {
             perror("Error al recibir el archivo");
             fclose(file);
             return;
         }
 
-        fwrite(buffer, 1, bytes_received, file);
-        file_size -= bytes_received;
+        fwrite(buffer, 1, bytesReceived, file);
+        fileSize -= bytesReceived;
     }
 
     fclose(file);
@@ -537,7 +530,7 @@ int connectoServer(char* ip){
 
 //-------------
 int startServer(char *dirName) {
-    int socket_desc, client_sock, c, read_size;
+    int socket_desc, client_sock, c, readSize;
     struct sockaddr_in server, client;
 #if defined _WIN32
     WSADATA wsa_data;
@@ -574,36 +567,36 @@ int startServer(char *dirName) {
     }
     puts("Connection accepted");
     // Receive a message from client
-    struct MensajeCliente mensaje;
-    while ((read_size = recv(client_sock, &mensaje, sizeof(mensaje), 0)) > 0) {
-        if (strcmp("crear", mensaje.proc) == 0) {
+    struct clientMessagge messagge;
+    while ((readSize = recv(client_sock, &messagge, sizeof(messagge), 0)) > 0) {
+        if (strcmp("crear", messagge.proc) == 0) {
             const char* response = "Listo para recibir archivo";
             send(client_sock, response, strlen(response), 0);
-            receive_file_serverSide(client_sock,dirName);
+            receiveFile(client_sock,dirName);
         } 
-        if (strcmp("eliminar", mensaje.proc) == 0) {
+        if (strcmp("eliminar", messagge.proc) == 0) {
             const char* response = "Listo para eliminar archivo";
             send(client_sock, response, strlen(response), 0);
-            delete_file_servSide(client_sock,dirName);
+            receiveDeleteFile(client_sock,dirName);
         } 
-        if (strcmp("modificar", mensaje.proc) == 0) {
-            recv(client_sock, &mensaje, sizeof(mensaje));
-            comprobarConflictivos(mensaje.proc, dirName);
-            receive_file_serverSide(client_sock,dirName);
-
+        if (strcmp("modificar", messagge.proc) == 0) {
+            recv(client_sock, &messagge, sizeof(messagge), 0);
+            checkConflicts(messagge.proc, dirName);
         } 
-        if (strcmp("break", mensaje.proc) == 0) {
+        if (strcmp("break", messagge.proc) == 0) {
             break;
         } 
     }
-    guardarDirectorio(dirName);
+    checkDirectory(client_sock,dirName);
+    saveDirectory(dirName);
+    strncpy(messagge.proc, "break", sizeof(messagge.proc)); //Copia el nombre de la funcion
+    send(client_sock, &messagge, sizeof(messagge), 0); //Envia el messagge
     readData(dirName);
-    imprimirListaNoDirectorio();
-    compararDirectorio(client_sock,dirName);
-    if (read_size == 0) {
+    printListNoDirectory();
+    if (readSize == 0) {
         puts("Client disconnected");
         fflush(stdout);
-    } else if (read_size == -1) {
+    } else if (readSize == -1) {
         perror("recv failed");
     }
 #if defined _WIN32
@@ -617,28 +610,31 @@ int main(int argc, char* argv[]) {
    if (argc == 2) {
         startServer(argv[1]);
     }else if(argc == 3){
-        int read_size;
+        int readSize;
         int sock = connectoServer(argv[2]);
-        compararDirectorio(sock, argv[1]);
-        struct MensajeCliente mensaje;
-        strncpy(mensaje.proc, "break", sizeof(mensaje.proc)); //Copia el nombre de la funcion
-        send(sock, &mensaje, sizeof(mensaje), 0); //Envia el mensaje
+        checkDirectory(sock, argv[1]);
+        struct clientMessagge messagge;
+        strncpy(messagge.proc, "break", sizeof(messagge.proc)); //Copia el nombre de la funcion
+        send(sock, &messagge, sizeof(messagge), 0); //Envia el messagge
         sleep(0.1);
-        while ((read_size = recv(sock, &mensaje, sizeof(mensaje), 0)) > 0) {
-            if (strcmp("crear", mensaje.proc) == 0) {
+        while ((readSize = recv(sock, &messagge, sizeof(messagge), 0)) > 0) {
+            if (strcmp("crear", messagge.proc) == 0) {
                 const char* response = "Listo para recibir archivo";
                 send(sock, response, strlen(response), 0);
-                receive_file_serverSide(sock,argv[1]);
+                receiveFile(sock,argv[1]);
             } 
-            if (strcmp("eliminar", mensaje.proc) == 0) {
+            if (strcmp("eliminar", messagge.proc) == 0) {
                 const char* response = "Listo para eliminar archivo";
                 send(sock, response, strlen(response), 0);
-                delete_file_servSide(sock,argv[1]);
+                receiveDeleteFile(sock,argv[1]);
+            } 
+            if (strcmp("break", messagge.proc) == 0) {
+                break;
             } 
         }
-        guardarDirectorio(argv[1]);
+        saveDirectory(argv[1]);
         readData(argv[1]);
-        imprimirListaNoDirectorio();
+        printListNoDirectory();
         close(sock);
     }
     return 0;
