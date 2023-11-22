@@ -313,8 +313,6 @@ void compararDirectorio(int sock, char *dirName){
     if (logs == NULL) {
         firstTime(sock,dirName);
         guardarDirectorio(dirName);
-        readData(dirName);
-        imprimirListaNoDirectorio();
         return;
     } else {
         DIR *dir = opendir(dirName);
@@ -386,9 +384,6 @@ void compararDirectorio(int sock, char *dirName){
                 contador--;
                 current = nextNode;  // Actualizar current al siguiente nodo guardado
             }
-            guardarDirectorio(dirName);
-            
-   
         }
         liberarListaNoDirectorio();
         closedir(dir);
@@ -538,10 +533,12 @@ int startServer(char *dirName) {
             break;
         } 
     }
+    compararDirectorio(client_sock,dirName);
     guardarDirectorio(dirName);
+    strncpy(mensaje.proc, "break", sizeof(mensaje.proc)); //Copia el nombre de la funcion
+    send(client_sock, &mensaje, sizeof(mensaje), 0); //Envia el mensaje
     readData(dirName);
     imprimirListaNoDirectorio();
-    compararDirectorio(client_sock,dirName);
     if (read_size == 0) {
         puts("Client disconnected");
         fflush(stdout);
@@ -576,6 +573,9 @@ int main(int argc, char* argv[]) {
                 const char* response = "Listo para eliminar archivo";
                 send(sock, response, strlen(response), 0);
                 delete_file_servSide(sock,argv[1]);
+            } 
+            if (strcmp("break", mensaje.proc) == 0) {
+                break;
             } 
         }
         guardarDirectorio(argv[1]);
