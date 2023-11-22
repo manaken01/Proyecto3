@@ -86,7 +86,7 @@ void readData(char* dirName) {
     struct fileInfo file;
     counter = 0;
     char fullpath[PATH_MAX];
-    snprintf(fullpath, PATH_MAX, "%s/%s", dirName, "logs.txt");
+    snprintf(fullpath, PATH_MAX, "%s/%s", dirName, ".logs.txt");
     FILE* logs = fopen(fullpath, "rb");
 
     if (logs == NULL) {
@@ -95,7 +95,7 @@ void readData(char* dirName) {
     }
 
     while (fread(&file, sizeof(struct fileInfo), 1, logs) > 0) {
-        if (strcmp(file.name, "logs.txt") != 0) {
+        if (strcmp(file.name, ".logs.txt") != 0) {
             struct listNoDirectory* newFile = (struct listNoDirectory*)malloc(sizeof(struct listNoDirectory));
             snprintf(newFile->file.name, sizeof(newFile->file.name), "%s", file.name);
             snprintf(newFile->file.date, sizeof(newFile->file.date), "%s", file.date);
@@ -186,7 +186,7 @@ void saveDirectory(char* dirName) {
     DIR* dir = opendir(dirName); // Se abre el directorio
 
     char fullpath[PATH_MAX];
-    snprintf(fullpath, PATH_MAX, "%s/%s", dirName, "logs.txt");
+    snprintf(fullpath, PATH_MAX, "%s/%s", dirName, ".logs.txt");
 
     FILE* logs = fopen(fullpath, "wb");
 
@@ -211,7 +211,7 @@ void saveDirectory(char* dirName) {
         }
 
         if (dp->d_type != DT_DIR) {
-            if (strcmp(dp->d_name,"logs.txt") != 0) {
+            if (strcmp(dp->d_name,".logs.txt") != 0) {
                 file.size = statbuf.st_size;
                 strncpy(file.name, dp->d_name, sizeof(file.name) - 1);
 
@@ -351,7 +351,7 @@ void firstTime(int sock, char *dirName) {
 
 void checkDirectory(int sock, char *dirName){
     char fullpath[PATH_MAX];
-    snprintf(fullpath, PATH_MAX, "%s/%s", dirName, "logs.txt");
+    snprintf(fullpath, PATH_MAX, "%s/%s", dirName, ".logs.txt");
     FILE* logs = fopen(fullpath, "rb");
     if (logs == NULL) {
         firstTime(sock,dirName);
@@ -379,7 +379,7 @@ void checkDirectory(int sock, char *dirName){
             }
                 
             if (dp->d_type != DT_DIR) {
-                if (strcmp(dp->d_name,"logs.txt") != 0) {
+                if (strcmp(dp->d_name,".logs.txt") != 0) {
                     fileD.size = statbuf.st_size;
                     strncpy(fileD.name, dp->d_name, sizeof(fileD.name) - 1);
 
@@ -629,6 +629,9 @@ int main(int argc, char* argv[]) {
                 receiveDeleteFile(sock,argv[1]);
             } 
             if (strcmp("break", messagge.proc) == 0) {
+                break;
+            } 
+            if (strcmp("break", mensaje.proc) == 0) {
                 break;
             } 
         }
