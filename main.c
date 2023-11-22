@@ -631,7 +631,7 @@ int main(int argc, char* argv[]) {
             if (strcmp("break", messagge.proc) == 0) {
                 break;
             } 
-            if (strcmp("break", mensaje.proc) == 0) {
+            if (strcmp("break", messagge.proc) == 0) {
                 break;
             } 
         }
