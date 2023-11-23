@@ -633,7 +633,6 @@ int main(int argc, char* argv[]) {
             } 
             if (strcmp("modificar", messagge.proc) == 0) {
                 recv(sock, &messagge, sizeof(messagge), 0);
-                checkConflicts(messagge.proc, argv[1]);
             } 
             if (strcmp("break", messagge.proc) == 0) {
                 break;
