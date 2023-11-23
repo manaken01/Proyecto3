@@ -167,7 +167,7 @@ void checkConflicts(char* filename, char* dirName){
                     printf("El archivo se ha renombrado exitosamente.\n");
                    
                 } else {
-                    perror("");
+                    printf("");
                 }
                 
                 printf("El archivo %s hay que actualizarlo \n", fileS.name);
@@ -255,7 +255,7 @@ void receiveDeleteFile(int clientSocket,char *dirName) {
     if (remove(fullpath) == 0) {
         printf("El archivo \"%s\" se eliminó correctamente.\n", messagge.proc);
     } else {
-        perror("");
+        printf("");
     }
 }
 
