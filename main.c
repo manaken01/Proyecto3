@@ -77,7 +77,7 @@ void printListNoDirectory() {
     struct listNoDirectory* current = listNoDirectoryHead;
 
     while (current != NULL) {
-        printf("Name: %s\nSize: %jd\nDate: %s\n\n", current->file.name, current->file.size, current->file.date);
+        printf("Name: %s\nSize: %jd\n\n", current->file.name, current->file.size);
         current = current->next;
     }
 }
@@ -167,7 +167,7 @@ void checkConflicts(char* filename, char* dirName){
                     printf("El archivo se ha renombrado exitosamente.\n");
                    
                 } else {
-                    perror("Error al intentar renombrar el archivo");
+                    perror("");
                 }
                 
                 printf("El archivo %s hay que actualizarlo \n", fileS.name);
@@ -255,7 +255,7 @@ void receiveDeleteFile(int clientSocket,char *dirName) {
     if (remove(fullpath) == 0) {
         printf("El archivo \"%s\" se eliminó correctamente.\n", messagge.proc);
     } else {
-        perror("Error al intentar eliminar el archivo");
+        perror("");
     }
 }
 
@@ -591,8 +591,11 @@ int startServer(char *dirName) {
     saveDirectory(dirName);
     strncpy(messagge.proc, "break", sizeof(messagge.proc)); //Copia el nombre de la funcion
     send(client_sock, &messagge, sizeof(messagge), 0); //Envia el messagge
+    sleep(0.1);
+    printf("Directorio actual\n");
     readData(dirName);
     printListNoDirectory();
+    printf("La sincronización ha finalizado\n");
     if (readSize == 0) {
         puts("Client disconnected");
         fflush(stdout);
@@ -628,16 +631,19 @@ int main(int argc, char* argv[]) {
                 send(sock, response, strlen(response), 0);
                 receiveDeleteFile(sock,argv[1]);
             } 
-            if (strcmp("break", messagge.proc) == 0) {
-                break;
+            if (strcmp("modificar", messagge.proc) == 0) {
+                recv(sock, &messagge, sizeof(messagge), 0);
+                checkConflicts(messagge.proc, argv[1]);
             } 
             if (strcmp("break", messagge.proc) == 0) {
                 break;
             } 
         }
         saveDirectory(argv[1]);
+        printf("Directorio actual\n");
         readData(argv[1]);
         printListNoDirectory();
+        printf("La sincronización ha finalizado\n");
         close(sock);
     }
     return 0;
