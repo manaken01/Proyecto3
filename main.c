@@ -325,10 +325,6 @@ void sendFile(int clientSocket, const char* filePath, const char* fileName) {
 void firstTime(int sock, char *dirName) {
     DIR *dir = opendir(dirName);
     /* Loop through directory entries. */
-    // En este primer loop se compara por cada archivo del directorio si se encuentra en los logs
-    //Caso 1: si se encuentra el archivo del directorio en los logs pero no se modificó
-    //Caso 1.2: si se encuentra el archivo del directorio en los logs y se modificó
-    //Caso 2: si el archivo que se encuentra en el directorio no se encuentra en los logs es porque es nuevo, se crea el archivo
     while ((dp = readdir(dir)) != NULL) {
        
         if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0)
@@ -595,6 +591,7 @@ int startServer(char *dirName) {
     readData(dirName);
     printListNoDirectory();
     printf("La sincronización ha finalizado\n");
+    freeListNoDirectory();
     if (readSize == 0) {
         puts("Client disconnected");
         fflush(stdout);
@@ -642,6 +639,7 @@ int main(int argc, char* argv[]) {
         readData(argv[1]);
         printListNoDirectory();
         printf("La sincronización ha finalizado\n");
+        freeListNoDirectory();
         close(sock);
     }
     return 0;
