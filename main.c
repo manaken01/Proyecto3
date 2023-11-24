@@ -77,7 +77,7 @@ void printListNoDirectory() {
     struct listNoDirectory* current = listNoDirectoryHead;
 
     while (current != NULL) {
-        printf("Name: %s\nSize: %jd\n\n", current->file.name, current->file.size);
+        printf("Name: %s\nSize: %jd\nDate: %s\n\n", current->file.name, current->file.size,current->file.date);
         current = current->next;
     }
 }
@@ -398,7 +398,6 @@ void checkDirectory(int sock, char *dirName){
 
                                 strncpy(messagge.proc, fileD.name, sizeof(messagge.proc)); //Copia el nombre de la funcion
                                 send(sock, &messagge, sizeof(messagge), 0); //Envia el messagge
-
                                 sendFile(sock,fullpath2,dp->d_name);
                             }
                             found = 1;
